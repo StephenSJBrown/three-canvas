@@ -113,7 +113,6 @@
     "test-e2e-cov": "node test/e2e/check-coverage.js",
     "test-treeshake": "rollup -c test/rollup.treeshake.config.js",
     "make-screenshot": "node test/e2e/puppeteer.js --make",
-    "heroku-postbuild": "npm install && npm run build"
   },
   "keywords": [
     "three",
