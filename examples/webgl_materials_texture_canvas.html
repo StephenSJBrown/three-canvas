@@ -1,31 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<title>three.js webgl - materials - canvas texture</title>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<link type="text/css" rel="stylesheet" href="main.css">
-		<style>
-			#drawing-canvas {
-				position: absolute;
-				background-color: #000000;
-				top: 0px;
-				right: 0px;
-				z-index: 3000;
-				cursor: crosshair;
-				touch-action: none;
-			}
-		</style>
-	</head>
-	<body>
 
-		<div id="info">
-			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - webgl - canvas as a texture
-			<div>click and draw in the white box</div>
-		</div>
-		<canvas id="drawing-canvas" height="128" width="128"></canvas>
+<head>
+	<title>three.js webgl - materials - canvas texture</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link type="text/css" rel="stylesheet" href="main.css">
+	<style>
+		#drawing-canvas {
+			position: absolute;
+			background-color: #000000;
+			top: 0px;
+			right: 0px;
+			z-index: 3000;
+			cursor: crosshair;
+			touch-action: none;
+		}
 
-		<!-- Import maps polyfill -->
+		#image-place {
+			max-width: 300px;
+		}
+	</style>
+</head>
+
+<body>
+
+	<div id="info">
+		<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - webgl - canvas as a texture
+		<div>click and draw in the white box</div>
+	</div>
+	<canvas id="drawing-canvas" height="128" width="128"></canvas>
+	<div id="ui">
+		<div class="colour-selector">green</div>
+		<div class="colour-selector">white</div>
+		<div class="colour-selector">red</div>
+		<div class="colour-selector">black</div>
+		<input id="image" type="file" />
+		<button id="reset">Clear</button>
+		<img id="image-place" src="" />
+	</div>
+
+	<a href="./models/Walrus/Walrus_UV.gltf" <!-- Import maps polyfill -->
 		<!-- Remove this when import maps will be widely supported -->
 		<script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
 
@@ -41,7 +56,10 @@
 
 			import * as THREE from 'three';
 
-			let camera, scene, renderer, mesh, material;
+			import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
+			import { ARButton } from './jsm/webxr/ARButton.js';
+
+			let camera, scene, renderer, mesh, material, GLTF, strokeColour
 			const drawStartPos = new THREE.Vector2();
 
 			init();
@@ -50,22 +68,116 @@
 
 			function init() {
 
-				camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 2000 );
+				let colourSelectors = document.getElementsByClassName("colour-selector")
+				for (let item of colourSelectors) {
+					item.addEventListener("click", e => {
+						strokeColour = e.target.innerText
+					});
+				}
+
+
+				camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 2000);
 				camera.position.z = 500;
 
 				scene = new THREE.Scene();
 
+				const light = new THREE.AmbientLight(0x404040, 0.5); // soft white light
+				scene.add(light);
+
+				const loader = new GLTFLoader();
+
 				material = new THREE.MeshBasicMaterial();
 
-				mesh = new THREE.Mesh( new THREE.BoxGeometry( 200, 200, 200 ), material );
-				scene.add( mesh );
+				loader.load('./models/Walrus/Walrus_UV.gltf', function (gltf) {
 
-				renderer = new THREE.WebGLRenderer( { antialias: true } );
-				renderer.setPixelRatio( window.devicePixelRatio );
-				renderer.setSize( window.innerWidth, window.innerHeight );
-				document.body.appendChild( renderer.domElement );
+					gltf.scene.scale.set(1, 1, 1)
+					GLTF = gltf.scene
+					GLTF.traverse(child => {
+						console.log(child.material)
+						if (child.material && child.material.name == "Violet" ) {
+							// child.material = material
+							// child.material.name = "Violet"
+						}
+					})
 
-				window.addEventListener( 'resize', onWindowResize );
+
+					scene.add(gltf.scene);
+
+				}, undefined, function (error) {
+
+					console.error(error);
+
+				});
+
+				document.getElementById('image').addEventListener("change", (e) => {
+					console.log(e.target.value)
+
+					var tgt = e.target || window.event.srcElement,
+						files = tgt.files;
+
+					// FileReader support
+					if (FileReader && files && files.length) {
+						var fr = new FileReader();
+						fr.onload = function () {
+							document.getElementById('image-place').src = fr.result;
+
+							const loader = new THREE.TextureLoader();
+
+							// load a resource
+							loader.load(
+								// resource URL
+								fr.result,
+
+								// onLoad callback
+								function (texture) {
+									// in this example we create the material when the texture is loaded
+									material = new THREE.MeshBasicMaterial({
+										map: texture
+									});
+									GLTF.traverse(child => {
+										console.log(child.material)
+										if (child.material && child.material.name == "Violet") {
+											console.log(`Changing ${child.material.uuid} as it's ${child.material.name}`)
+											child.material = material
+										}
+									})
+								},
+
+								// onProgress callback currently not supported
+								undefined,
+
+								// onError callback
+								function (err) {
+									console.error('An error happened.');
+								}
+							);
+
+						}
+						fr.readAsDataURL(files[0]);
+					}
+
+					// Not supported
+					else {
+						// fallback -- perhaps submit the input to an iframe and temporarily store
+						// them on the server until the user's session ends.
+					}
+
+
+
+
+				})
+
+
+				mesh = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), material);
+				// scene.add(mesh);
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				renderer.outputEncoding = THREE.sRGBEncoding;
+				renderer.setPixelRatio(window.devicePixelRatio);
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				document.body.appendChild(renderer.domElement);
+
+				window.addEventListener('resize', onWindowResize);
 
 			}
 
@@ -75,59 +187,72 @@
 
 				// get canvas and context
 
-				const drawingCanvas = document.getElementById( 'drawing-canvas' );
-				const drawingContext = drawingCanvas.getContext( '2d' );
+				const drawingCanvas = document.getElementById('drawing-canvas');
+				const drawingContext = drawingCanvas.getContext('2d');
 
 				// draw white background
 
 				drawingContext.fillStyle = '#FFFFFF';
-				drawingContext.fillRect( 0, 0, 128, 128 );
+				drawingContext.fillRect(0, 0, 128, 128);
 
 				// set canvas as material.map (this could be done to any map, bump, displacement etc.)
 
-				material.map = new THREE.CanvasTexture( drawingCanvas );
+				material.map = new THREE.CanvasTexture(drawingCanvas);
+
+				document.getElementById('reset').addEventListener("click", () => {
+					drawingContext.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+					drawingContext.fillStyle = '#FFFFFF';
+					drawingContext.fillRect(0, 0, 128, 128);
+					drawingContext.beginPath()
+					material.map = new THREE.CanvasTexture(drawingCanvas);
+				})
+
+				document.body.appendChild(ARButton.createButton(renderer));
+				renderer.xr.enabled = true;
 
 				// set the variable to keep track of when to draw
 
 				let paint = false;
 
 				// add canvas event listeners
-				drawingCanvas.addEventListener( 'pointerdown', function ( e ) {
+				drawingCanvas.addEventListener('pointerdown', function (e) {
 
 					paint = true;
-					drawStartPos.set( e.offsetX, e.offsetY );
+					drawStartPos.set(e.offsetX, e.offsetY);
 
-				} );
+				});
 
-				drawingCanvas.addEventListener( 'pointermove', function ( e ) {
+				drawingCanvas.addEventListener('pointermove', function (e) {
 
-					if ( paint ) draw( drawingContext, e.offsetX, e.offsetY );
+					if (paint) draw(drawingContext, e.offsetX, e.offsetY);
 
-				} );
+				});
 
-				drawingCanvas.addEventListener( 'pointerup', function () {
-
-					paint = false;
-
-				} );
-
-				drawingCanvas.addEventListener( 'pointerleave', function () {
+				drawingCanvas.addEventListener('pointerup', function () {
 
 					paint = false;
 
-				} );
+				});
+
+				drawingCanvas.addEventListener('pointerleave', function () {
+
+					paint = false;
+
+				});
 
 			}
 
-			function draw( drawContext, x, y ) {
+			function draw(drawContext, x, y) {
 
-				drawContext.moveTo( drawStartPos.x, drawStartPos.y );
-				drawContext.strokeStyle = '#000000';
-				drawContext.lineTo( x, y );
+				drawContext.moveTo(drawStartPos.x, drawStartPos.y);
+				drawContext.strokeStyle = strokeColour;
+				drawContext.lineTo(x, y);
 				drawContext.stroke();
 				// reset drawing start position to current position.
-				drawStartPos.set( x, y );
+				drawStartPos.set(x, y);
 				// need to flag the map as needing updating.
+				material.flipY = true
+				// material.map.rotation = 180
 				material.map.needsUpdate = true;
 
 			}
@@ -137,22 +262,23 @@
 				camera.aspect = window.innerWidth / window.innerHeight;
 				camera.updateProjectionMatrix();
 
-				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setSize(window.innerWidth, window.innerHeight);
 
 			}
 
 			function animate() {
 
-				requestAnimationFrame( animate );
+				requestAnimationFrame(animate);
 
-				mesh.rotation.x += 0.01;
-				mesh.rotation.y += 0.01;
+				// GLTF.rotation.x += 0.0;
+				GLTF.rotation.y += 0.01;
 
-				renderer.render( scene, camera );
+				renderer.render(scene, camera);
 
 			}
 
 		</script>
 
-	</body>
+</body>
+
 </html>
